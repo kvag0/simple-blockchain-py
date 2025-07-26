@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Visualizador de Blockchain</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        .block { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; background: white; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: background-color 0.5s; }
+        .block h3 { margin-top: 0; color: #007bff; }
+        .block p { margin: 5px 0; word-break: break-all; font-size: 0.9em; }
+        .block-meta { font-size: 0.8em; color: #888; }
+        .form-container, .mine-container { padding: 20px; background: white; border-radius: 8px; margin-bottom: 20px; }
+        h1, h2 { color: #333; }
+        input { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 12px 15px; border: none; background: #28a745; color: white; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color 0.2s; }
+        button:hover { background: #218838; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #mineButton { background-color: #007bff; }
+        #mineButton:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Visualizador de Blockchain Simples</h1>
+
+        <div class="mine-container">
+            <h2>Mineração</h2>
+            <button id="mineButton">Minerar Novo Bloco</button>
+        </div>
+
+        <div class="form-container">
+            <h2>Adicionar Nova Transação</h2>
+            <input type="text" id="sender" placeholder="De (ex: Alice)">
+            <input type="text" id="recipient" placeholder="Para (ex: Bob)">
+            <input type="number" id="amount" placeholder="Valor">
+            <button id="transactionButton">Enviar Transação</button>
+        </div>
+
+        <h2>Corrente de Blocos</h2>
+        <div id="blockchain-chain">A carregar a corrente...</div>
+    </div>
+
+    <script>
+        const mineButton = document.getElementById('mineButton');
+        const transactionButton = document.getElementById('transactionButton');
+        const chainContainer = document.getElementById('blockchain-chain');
+
+        async function fetchChain() {
+            const response = await fetch('/chain');
+            const data = await response.json();
+            chainContainer.innerHTML = '';
+            data.chain.forEach((block, index) => {
+                const blockDiv = document.createElement('div');
+                blockDiv.className = 'block';
+                blockDiv.innerHTML = `
+                    <h3>Bloco ${block.index}</h3>
+                    <p><strong>Hash:</strong> ${block.hash}</p>
+                    <p><strong>Hash Anterior:</strong> ${block.previous_hash}</p>
+                    <p><strong>Prova (Proof):</strong> ${block.proof}</p>
+                    <p><strong>Transações:</strong> ${block.transactions.length > 0 ? JSON.stringify(block.transactions) : 'Bloco de recompensa'}</p>
+                    <p class="block-meta">Timestamp: ${new Date(block.timestamp * 1000).toLocaleString()}</p>
+                `;
+                chainContainer.appendChild(blockDiv);
+                // Anima o último bloco a aparecer
+                if (index === data.chain.length - 1) {
+                    blockDiv.style.backgroundColor = '#e7f3ff';
+                    setTimeout(() => { blockDiv.style.backgroundColor = 'white'; }, 1000);
+                }
+            });
+        }
+
+        mineButton.addEventListener('click', async () => {
+            mineButton.textContent = 'A minerar...';
+            mineButton.disabled = true;
+            await fetch('/mine');
+            await fetchChain();
+            mineButton.textContent = 'Minerar Novo Bloco';
+            mineButton.disabled = false;
+        });
+
+        transactionButton.addEventListener('click', async () => {
+            const sender = document.getElementById('sender').value;
+            const recipient = document.getElementById('recipient').value;
+            const amount = document.getElementById('amount').value;
+            if (!sender || !recipient || !amount) { return alert('Preencha todos os campos.'); }
+
+            await fetch('/transactions/new', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sender, recipient, amount: Number(amount) })
+            });
+            alert('Transação adicionada à lista de pendentes! Mine um novo bloco para a incluir.');
+            document.getElementById('sender').value = '';
+            document.getElementById('recipient').value = '';
+            document.getElementById('amount').value = '';
+        });
+        
+        fetchChain();
+    </script>
+</body>
+</html>
