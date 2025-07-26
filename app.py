@@ -1,10 +1,11 @@
 from flask import Flask, jsonify, request, send_from_directory
 from blockchain import Blockchain
+from uuid import uuid4
 
 # Inicializa a aplicação Flask
 app = Flask(__name__)
-
-# Instancia a nossa Blockchain. Esta será a nossa única cópia "oficial" da corrente.
+# Cria um endereço único para este nó
+node_identifier = str(uuid4()).replace('-', '')
 blockchain = Blockchain()
 
 # --- ROTAS DA API ---
@@ -25,9 +26,10 @@ def mine_block():
     proof = blockchain.proof_of_work(last_proof)
 
     # A recompensa por encontrar a prova. O sender "0" significa que é uma nova moeda.
+    # Na função mine_block()
     blockchain.new_transaction(
         sender="0",
-        recipient="NÓ_ATUAL", # No futuro, isto seria o ID do nosso nó
+        recipient=node_identifier, # Mude para esta variável
         amount=1,
     )
 
@@ -65,7 +67,44 @@ def full_chain():
     }
     return jsonify(response), 200
 
+@app.route('/nodes/register', methods=['POST'])
+def register_nodes():
+    values = request.get_json()
+    nodes = values.get('nodes')
+    if nodes is None:
+        return "Erro: Forneça uma lista de nós válida", 400
+
+    for node in nodes:
+        blockchain.register_node(node)
+
+    response = {
+        'message': 'Novos nós foram adicionados',
+        'total_nodes': list(blockchain.nodes),
+    }
+    return jsonify(response), 201
+
+@app.route('/nodes/resolve', methods=['GET'])
+def consensus():
+    replaced = blockchain.resolve_conflicts()
+
+    if replaced:
+        response = {
+            'message': 'A nossa corrente foi substituída pela autoritativa',
+            'new_chain': [block.to_dict() for block in blockchain.chain]
+        }
+    else:
+        response = {
+            'message': 'A nossa corrente é a autoritativa',
+            'chain': [block.to_dict() for block in blockchain.chain]
+        }
+
+    return jsonify(response), 200
+
 # --- PONTO DE ENTRADA ---
 if __name__ == '__main__':
-    # Usamos 0.0.0.0 para que o servidor seja acessível na rede local
-    app.run(host='0.0.0.0', port=5001)
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument('-p', '--port', default=5001, type=int, help='porta para escutar')
+    args = parser.parse_args()
+    port = args.port
+    app.run(host='0.0.0.0', port=port)
